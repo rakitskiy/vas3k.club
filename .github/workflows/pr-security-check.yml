@@ -12,6 +12,7 @@ jobs:
     check_secret:
         name: Check Secrets
         runs-on: ubuntu-latest
+        if: (github.actor != 'dependabot[bot]')
         steps:
           - name: Checkout
             uses: actions/checkout@v3
@@ -21,4 +22,15 @@ jobs:
           - name: GitLeaks
             uses: gitleaks/gitleaks-action@v2
             env:
-                GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}    
+                GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    sast:
+        name: Run Semgrep
+        runs-on: ubuntu-latest
+        if: (github.actor != 'dependabot[bot]')
+        container:
+          image: semgrep/semgrep
+        steps:
+          - uses: actions/checkout@v3
+          - run: semgrep ci
+            env:
+              SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}

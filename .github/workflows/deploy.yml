@@ -6,9 +6,54 @@ on:
       - master
 
 jobs:
+  security_validation:
+    name: Validate Build Security
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@master
+      
+      - name: Check Secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: SAST scan
+        run: |
+          python3 -m pip install semgrep
+          semgrep --version
+          semgrep scan --metrics=off
+          semgrep scan --sarif --output=semgrep.sarif
+          if [[ $(jq '.results.severities.high + .results.severities.critical' < semgrep.sarif) -gt 0 ]]; then
+          echo "Semgrep found vulnerabilities with severity higher than medium"
+          exit 1
+          fi
+        env:
+          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+
+      - name: Run Trivy vulnerability scanner in FS mode
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          hide-progress: false
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: 'MEDIUM,HIGH,CRITICAL'
+
+      - name: Run Trivy vulnerability scanner in IaC mode
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'config'
+          hide-progress: false
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: 'MEDIUM,HIGH,CRITICAL'
+
   build:
     name: Build image
     runs-on: ubuntu-latest
+    needs: security_validation
     steps:
       - uses: actions/checkout@master
       - run: docker login ghcr.io -u $GITHUB_ACTOR -p ${{ secrets.TOKEN }}
